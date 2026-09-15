@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from types import ModuleType
 
-    from numpy.typing import NDArray
+    from numpy.typing import DTypeLike, NDArray
 
 
 def get_xp(device: str) -> ModuleType:
@@ -60,3 +61,21 @@ def to_numpy(arr: NDArray) -> np.ndarray:
     # cupy.ndarray exposes .get(); fall back to np.asarray for other dispatchers.
     get = getattr(arr, "get", None)
     return get() if callable(get) else np.asarray(arr)
+
+
+def sketch_dtype(dtype: DTypeLike | None, *inputs: Sequence[NDArray]) -> np.dtype:
+    """Resolve the sketch dtype.
+
+    Args:
+        dtype: Explicit sketch dtype, or None to follow the inputs.
+        *inputs: MPS or MPO tensors.
+
+    Returns:
+        The explicit dtype, or the real floating counterpart of the inputs dtype.
+    """
+    if dtype is not None:
+        return np.dtype(dtype)
+    input_dtype = np.result_type(*(arr.dtype for inpt in inputs for arr in inpt))
+    if input_dtype.kind in "fc":
+        return np.finfo(input_dtype).dtype
+    return np.dtype(np.float64)

@@ -8,6 +8,8 @@
 
 """
 
+from __future__ import annotations
+
 import numpy as np
 import pytest
 import quimb.tensor as qtn
@@ -605,3 +607,38 @@ def test_benchmark_src_mpo_mpo(benchmark):
 
     # Still has to be correct
     np.testing.assert_allclose(H1.distance(as_mpo(result_mpo)), 0.0, atol=1e-6)
+
+
+@pytest.mark.parametrize("make_train", [qtn.MPS_rand_state, qtn.MPO_rand])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+def test_compress_precision(make_train, dtype) -> None:
+    tensor = make_train(4, bond_dim=2, dtype=dtype, seed=12)
+
+    result = compress(tensor.arrays, chi_out=2, seed=14)
+
+    assert all(arr.dtype == dtype for arr in result)
+    tolerance = 2e-5 if np.finfo(dtype).bits == 32 else 1e-12
+    np.testing.assert_allclose(
+        type(tensor)(result).to_dense(),
+        tensor.to_dense(),
+        rtol=tolerance,
+        atol=tolerance,
+    )
+
+
+@pytest.mark.parametrize("make_train", [qtn.MPS_rand_state, qtn.MPO_rand])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+def test_apply_precision(make_train, dtype) -> None:
+    tensor = make_train(4, bond_dim=2, dtype=dtype, seed=12)
+    identity = qtn.MPO_identity(4, phys_dim=2, dtype=dtype)
+
+    result = apply(identity.arrays, tensor.arrays, chi_out=2, seed=14)
+
+    assert all(arr.dtype == dtype for arr in result)
+    tolerance = 2e-5 if np.finfo(dtype).bits == 32 else 1e-12
+    np.testing.assert_allclose(
+        type(tensor)(result).to_dense(),
+        tensor.to_dense(),
+        rtol=tolerance,
+        atol=tolerance,
+    )

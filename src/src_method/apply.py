@@ -13,7 +13,6 @@ from __future__ import annotations
 from time import perf_counter_ns
 from typing import TYPE_CHECKING
 
-import numpy as np
 import structlog
 from opt_einsum import contract
 
@@ -30,12 +29,14 @@ from .utils import (
     to_numpy,
     truncated_qr,
 )
+from .utils._backend import sketch_dtype
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from types import ModuleType
 
-    from numpy.typing import NDArray
+    import numpy as np
+    from numpy.typing import DTypeLike, NDArray
 
 # Set up logger
 setup_logging()
@@ -61,7 +62,7 @@ def apply(
     chi_out: int,
     *,
     cutoff: float = 0.0,
-    dtype: type = np.float64,
+    dtype: DTypeLike | None = None,
     seed: int | None = None,
     device: str = "cpu",
 ) -> list[NDArray]:
@@ -85,7 +86,10 @@ def apply(
             site during the right-to-left sweep.  The SVD operates on the
             small ``(chi_out, chi_out)`` R factor from QR, so overhead is
             minimal.  Set to 0.0 (default) to keep all bonds at chi_out.
-        dtype: The data type for the computation.
+        dtype: Data type of the Gaussian random sketch.
+            Defaults to the real floating type matching the
+            dtype of the inputs.
+            An explicit override can promote the result.
         seed: An optional seed for the random number generator.
         device: ``"cpu"`` (default, numpy) or ``"gpu"`` (cupy).  Requires
             the optional ``cupy`` dependency for GPU execution.
@@ -124,6 +128,7 @@ def apply(
         check_exact_supported(len(left_tensor))
         logger.warning(LOG_WARN_SMALL)
         return exact_apply(left_tensor, right_tensor, chi_out, right_kind)
+    dtype = sketch_dtype(dtype, left_tensor, right_tensor)
     if right_kind == "mps":
         return _src_mpo_mps(
             left_tensor, right_tensor, chi_out, prng, xp, cutoff=cutoff, dtype=dtype
@@ -146,7 +151,7 @@ def _src_mpo_mps(
     xp: ModuleType,
     *,
     cutoff: float = 0.0,
-    dtype: type = np.float64,
+    dtype: DTypeLike,
 ) -> list[NDArray]:
     """Computes the compressed product |η> ≈ H|ψ> using the SRC method.
 
@@ -157,7 +162,7 @@ def _src_mpo_mps(
         prng: A numpy / cupy random number generator.
         xp: Array module (``numpy`` or ``cupy``).
         cutoff: Relative singular-value cutoff for adaptive bond truncation.
-        dtype: The data type for the computation.
+        dtype: Data type of the Gaussian random sketch.
 
     Returns:
         The site arrays of the compressed MPS |η> in right-canonical form.
@@ -259,7 +264,7 @@ def _src_mpo_mpo(
     xp: ModuleType,
     *,
     cutoff: float = 0.0,
-    dtype: type = np.float64,
+    dtype: DTypeLike,
 ) -> list[NDArray]:
     """Computes the compressed product H_new ≈ H1 @ H2 using the SRC method.
 
@@ -270,7 +275,7 @@ def _src_mpo_mpo(
         prng: A numpy / cupy random number generator.
         xp: Array module (``numpy`` or ``cupy``).
         cutoff: Relative singular-value cutoff for adaptive bond truncation.
-        dtype: The data type for the computation.
+        dtype: Data type of the Gaussian random sketch.
 
     Returns:
         The site arrays of the compressed MPO in right-canonical form.

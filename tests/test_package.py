@@ -610,7 +610,9 @@ def test_benchmark_src_mpo_mpo(benchmark):
 
 
 @pytest.mark.parametrize("make_train", [qtn.MPS_rand_state, qtn.MPO_rand])
-@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+@pytest.mark.parametrize(
+    "dtype", [np.float32, np.float64, np.complex64, np.complex128]
+)
 def test_compress_precision(make_train, dtype) -> None:
     tensor = make_train(4, bond_dim=2, dtype=dtype, seed=12)
 
